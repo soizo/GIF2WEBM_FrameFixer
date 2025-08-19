@@ -5,7 +5,7 @@ import subprocess
 from PIL import Image, ImageSequence  # 用於調整尺寸
 
 
-def gif_to_webm(input_gif, output_webm, target_fps=60, target_duration=3, target_size=(512, 512)):
+def gif_to_webm(input_gif, output_webm, target_fps=60, target_duration=2, target_size=(512, 512)):
     # 讀取 GIF 使用 PIL 以更好地處理透明通道
     with Image.open(input_gif) as im:
         frames = []
