@@ -1,99 +1,144 @@
+import argparse
+import logging
+import os
+import shutil
+import subprocess
+
 import imageio
 import numpy as np
-import os
-import subprocess
-from PIL import Image, ImageSequence  # 用於調整尺寸
+from PIL import Image, ImageSequence
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+logger = logging.getLogger(__name__)
 
 
-def gif_to_webm(input_gif, output_webm, target_fps=60, target_duration=2, target_size=(512, 512)):
-    # 讀取 GIF 使用 PIL 以更好地處理透明通道
+def gif_to_webm(
+    input_gif: str,
+    output_webm: str,
+    target_fps: int = 60,
+    target_duration: float = 2.0,
+    target_size: tuple[int, int] = (512, 512),
+) -> None:
+    """Convert a GIF animation to WebM format with frame standardization.
+
+    Reads the input GIF, repeats frames to meet the target duration,
+    resizes all frames to the target size, then encodes to VP9 WebM
+    with alpha channel support via FFmpeg.
+
+    Args:
+        input_gif: Path to the input GIF file.
+        output_webm: Path for the output WebM file.
+        target_fps: Output frame rate in frames per second.
+        target_duration: Minimum output duration in seconds.
+        target_size: Output frame dimensions as (width, height).
+    """
+    if not os.path.isfile(input_gif):
+        raise FileNotFoundError(f"Input GIF not found: {input_gif}")
+
     with Image.open(input_gif) as im:
         frames = []
         durations = []
-
         for frame in ImageSequence.Iterator(im):
-            frame = frame.convert("RGBA")  # 確保使用 RGBA 模式
-            durations.append(frame.info.get('duration', 100))  # 預設持續時間 100ms
+            frame = frame.convert("RGBA")
+            durations.append(frame.info.get("duration", 100))
             frames.append(np.array(frame))
 
-    # 計算原始平均幀率
-    total_duration = sum(durations)
-    if total_duration == 0:
-        raise ValueError("GIF 總持續時間為 0，無法計算幀率")
+    if not frames:
+        raise ValueError(f"No frames found in GIF: {input_gif}")
 
-    average_duration = total_duration / len(durations)
-    original_fps = 1000 / average_duration
-    print(f"原始 GIF 平均幀率: {original_fps:.2f} FPS")
+    total_duration_ms = sum(durations)
+    if total_duration_ms == 0:
+        raise ValueError(f"GIF total duration is 0: {input_gif}")
 
-    # 計算需要重複的次數以達到目標時長
-    original_duration = total_duration / 1000  # 轉換為秒
-    repeat_times = int(np.ceil(target_duration / original_duration))
-    print(f"原始動畫時長: {original_duration:.2f} 秒，將重複 {repeat_times} 次以達到 ≥{target_duration} 秒")
+    average_duration_ms = total_duration_ms / len(durations)
+    original_fps = 1000 / average_duration_ms
+    original_duration_s = total_duration_ms / 1000
+    logger.info("Original GIF: %.2f FPS, %.2f s", original_fps, original_duration_s)
 
-    # 重複幀以達到目標時長
+    repeat_times = int(np.ceil(target_duration / original_duration_s))
+    logger.info(
+        "Repeating %d time(s) to reach >= %.1f s", repeat_times, target_duration
+    )
     frames = frames * repeat_times
 
-    # 調整尺寸為 512x512
-    resized_frames = []
-    for frame in frames:
-        img = Image.fromarray(frame).resize(target_size, Image.Resampling.LANCZOS)
-        resized_frames.append(np.array(img))
-
-    # 存儲中間格式
-    temp_frames_dir = "temp_frames"
-    os.makedirs(temp_frames_dir, exist_ok=True)
-    frame_paths = []
-
-    for i, frame in enumerate(resized_frames):
-        frame_path = os.path.join(temp_frames_dir, f"frame_{i:03d}.png")
-        imageio.imwrite(frame_path, frame)
-        frame_paths.append(frame_path)
-
-    # 使用 FFmpeg 轉換
-    ffmpeg_cmd = [
-        "ffmpeg",
-        "-y",
-        "-framerate", f"{original_fps:.2f}",
-        "-i", os.path.join(temp_frames_dir, "frame_%03d.png"),
-        "-r", str(target_fps),
-        "-c:v", "libvpx-vp9",
-        "-b:v", "500K",
-        "-pix_fmt", "yuva420p",  # 支援透明通道
-        "-auto-alt-ref", "0",
-        output_webm
+    resized_frames = [
+        np.array(Image.fromarray(f).resize(target_size, Image.Resampling.LANCZOS))
+        for f in frames
     ]
 
+    temp_dir = output_webm + ".tmp_frames"
+    os.makedirs(temp_dir, exist_ok=True)
     try:
-        subprocess.run(ffmpeg_cmd, check=True)
-    except subprocess.CalledProcessError as e:
-        print(f"FFmpeg 轉換失敗: {e}")
-        raise
+        frame_paths = []
+        for i, frame in enumerate(resized_frames):
+            path = os.path.join(temp_dir, f"frame_{i:04d}.png")
+            imageio.imwrite(path, frame)
+            frame_paths.append(path)
+
+        ffmpeg_cmd = [
+            "ffmpeg",
+            "-y",
+            "-framerate", f"{original_fps:.2f}",
+            "-i", os.path.join(temp_dir, "frame_%04d.png"),
+            "-r", str(target_fps),
+            "-c:v", "libvpx-vp9",
+            "-b:v", "500K",
+            "-pix_fmt", "yuva420p",
+            "-auto-alt-ref", "0",
+            output_webm,
+        ]
+        subprocess.run(ffmpeg_cmd, check=True, capture_output=True)
     finally:
-        for file in frame_paths:
-            if os.path.exists(file):
-                os.remove(file)
-        if os.path.exists(temp_frames_dir):
-            os.rmdir(temp_frames_dir)
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
-    print(f"轉換完成: {output_webm}")
+    logger.info("Done: %s", output_webm)
 
 
-# 使用示例
-input_folder = "input"
-output_folder = "output"
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Convert GIF animations to WebM (VP9) with frame standardization."
+    )
+    parser.add_argument(
+        "-i", "--input", default="input", help="Input folder containing GIF files (default: input)"
+    )
+    parser.add_argument(
+        "-o", "--output", default="output", help="Output folder for WebM files (default: output)"
+    )
+    parser.add_argument(
+        "--fps", type=int, default=60, help="Output frame rate (default: 60)"
+    )
+    parser.add_argument(
+        "--duration", type=float, default=2.0, help="Minimum output duration in seconds (default: 2.0)"
+    )
+    parser.add_argument(
+        "--size", type=int, nargs=2, metavar=("W", "H"), default=[512, 512],
+        help="Output frame size width height (default: 512 512)"
+    )
+    args = parser.parse_args()
 
-# 如果輸出文件夾不存在，則創建
-if not os.path.exists(output_folder):
-    os.makedirs(output_folder)
+    if not os.path.isdir(args.input):
+        logger.error("Input folder not found: %s", args.input)
+        raise SystemExit(1)
 
-# 遍注input文件夾中的所有GIF文件
-for filename in os.listdir(input_folder):
-    if filename.lower().endswith(".gif"):
-        input_path = os.path.join(input_folder, filename)
-        output_filename = os.path.splitext(filename)[0] + ".webm"
-        output_path = os.path.join(output_folder, output_filename)
+    os.makedirs(args.output, exist_ok=True)
+    target_size = tuple(args.size)
 
-        print(f"正在轉換: {input_path} -> {output_path}")
-        gif_to_webm(input_path, output_path)
+    gif_files = [f for f in os.listdir(args.input) if f.lower().endswith(".gif")]
+    if not gif_files:
+        logger.warning("No GIF files found in: %s", args.input)
+        return
 
-print("所有轉換完成!")
+    for filename in gif_files:
+        input_path = os.path.join(args.input, filename)
+        output_path = os.path.join(args.output, os.path.splitext(filename)[0] + ".webm")
+        logger.info("Converting: %s -> %s", input_path, output_path)
+        try:
+            gif_to_webm(input_path, output_path, args.fps, args.duration, target_size)
+        except Exception as exc:
+            logger.error("Failed to convert %s: %s", filename, exc)
+
+    logger.info("All conversions complete.")
+
+
+if __name__ == "__main__":
+    main()
