@@ -1,7 +1,70 @@
-[🔗](https://telegra.ph/%E5%85%8D%E8%B2%BB%E5%B0%87%E9%80%8F%E6%98%8E%E5%BA%95%E5%8B%95%E6%85%8BGIF%E6%B7%BB%E5%8A%A0%E5%88%B0%E8%B2%BC%E7%B4%99%E6%96%B9%E6%B3%95-01-30)
+# GIF2WEBM FrameFixer
 
-使用方法：
-1. 創建一個`input`文件夾在這個Python文件旁邊
-2. 然後把gif全部導入進去
+Convert animated GIFs to WebM video using the VP9 codec, with full alpha-channel (transparency) support. Useful for creating Telegram stickers or any context requiring transparent WebM animations.
 
-可能需要安裝一些依賴你們自己搞吧
+## Features
+
+- Preserves transparency (RGBA → VP9 + yuva420p)
+- Loops short GIFs to meet a minimum duration (default 2 s)
+- Resizes output to a target resolution (default 512×512)
+- Batch-converts all GIFs in an input folder
+
+## Prerequisites
+
+- Python 3.10+
+- [FFmpeg](https://ffmpeg.org/download.html) installed and available on your `PATH`
+
+## Installation
+
+```bash
+# Clone the repo
+git clone https://github.com/soizo/GIF2WEBM_FrameFixer.git
+cd GIF2WEBM_FrameFixer
+
+# (Optional) Create a virtual environment
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
+
+# Install Python dependencies
+pip install -r requirements.txt
+```
+
+## Usage
+
+1. Place your `.gif` files in the `input/` folder (create it if it doesn't exist).
+2. Run the script:
+
+```bash
+python GIF2WEBM_FrameFixer.py
+```
+
+Output `.webm` files will be saved to the `output/` folder.
+
+### Options
+
+| Flag | Default | Description |
+|---|---|---|
+| `--input` | `input` | Folder containing input GIF files |
+| `--output` | `output` | Folder for output WebM files |
+| `--fps` | `60` | Output frame rate |
+| `--min-duration` | `2.0` | Minimum output duration in seconds |
+| `--size` | `512` | Output width and height (square) |
+
+**Example — custom settings:**
+
+```bash
+python GIF2WEBM_FrameFixer.py --input my_gifs --output my_webms --fps 30 --min-duration 3 --size 256
+```
+
+## Output Format
+
+| Property | Value |
+|---|---|
+| Container | WebM |
+| Video codec | VP9 (`libvpx-vp9`) |
+| Pixel format | `yuva420p` (alpha channel preserved) |
+| Bitrate | 500 Kbps |
+
+## License
+
+MIT — see [LICENSE](LICENSE).
