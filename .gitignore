@@ -1,6 +1,8 @@
-/*output*/
-/*input*/
+/output/
+/input/
 /.venv/
 /.idea/
 .DS_Store
 .claude/
+__pycache__/
+*.pyc

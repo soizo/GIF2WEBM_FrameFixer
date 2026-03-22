@@ -8,6 +8,7 @@ Convert animated GIFs to WebM video using the VP9 codec, with full alpha-channel
 - Loops short GIFs to meet a minimum duration (default 2 s)
 - Resizes output to a target resolution (default 512×512)
 - Batch-converts all GIFs in an input folder
+- Supports CLI arguments for full customization
 
 ## Prerequisites
 
@@ -44,16 +45,20 @@ Output `.webm` files will be saved to the `output/` folder.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--input` | `input` | Folder containing input GIF files |
-| `--output` | `output` | Folder for output WebM files |
-| `--fps` | `60` | Output frame rate |
-| `--min-duration` | `2.0` | Minimum output duration in seconds |
-| `--size` | `512` | Output width and height (square) |
+| `-i, --input DIR` | `input` | Input folder containing GIF files |
+| `-o, --output DIR` | `output` | Output folder for WebM files |
+| `--fps N` | `60` | Output frame rate |
+| `--duration SECS` | `2.0` | Minimum output duration in seconds |
+| `--size W H` | `512 512` | Output frame dimensions |
 
-**Example — custom settings:**
+**Examples:**
 
 ```bash
-python GIF2WEBM_FrameFixer.py --input my_gifs --output my_webms --fps 30 --min-duration 3 --size 256
+# Custom output: 30 FPS, 3 seconds, 720×720
+python GIF2WEBM_FrameFixer.py --fps 30 --duration 3 --size 720 720
+
+# Custom input/output folders
+python GIF2WEBM_FrameFixer.py -i my_gifs -o my_webms
 ```
 
 ## Output Format
